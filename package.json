@@ -1,0 +1,31 @@
+{
+  "name": "repo-to-txt-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for analyzing and converting Git repositories to text files for LLM context",
+  "main": "smithery-wrapper.js",
+  "bin": {
+    "repo-to-txt-mcp": "./smithery-wrapper.js"
+  },
+  "scripts": {
+    "start": "node smithery-wrapper.js"
+  },
+  "keywords": [
+    "mcp",
+    "git",
+    "repository",
+    "text",
+    "llm",
+    "context",
+    "cursor",
+    "smithery"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "fs": "0.0.1-security",
+    "path": "^0.12.7"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
