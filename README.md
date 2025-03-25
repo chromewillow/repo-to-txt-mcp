@@ -1,138 +1,112 @@
-# Repo-to-TXT MCP Server
+# repo-to-txt-mcp
 
-An MCP (Multimodal Capability Provider) server implementation for the [LLM Chat Repo Context](https://github.com/lukaszliniewicz/LLM_Chat_Repo_Context) tool, which analyzes Git repositories and converts them to text files suitable for providing context to LLMs.
+An MCP server for analyzing and converting Git repositories to text files for LLM context.
+
+## Overview
+
+repo-to-txt-mcp is a Machine Code Protocol (MCP) server that allows you to analyze GitHub repositories or local folders and convert them into structured text files. This is particularly useful for providing context about repositories to large language models (LLMs) like GPT-4.
+
+This project extends the functionality of the [repo-to-txt](https://github.com/chromewillow/repo-to-txt-mcp) CLI tool to provide a web API that can be integrated into other applications, particularly Cursor's MCP system.
 
 ## Features
 
-- Analyze Git repositories or local folders and convert them to text files
-- Generate folder structure
-- Concatenate file contents
-- Filter files by extension
-- Count tokens in the output (using tiktoken)
-- REST API for integration with LLM platforms
-- Smithery integration for easy deployment
-
-## Requirements
-
-- Python 3.6+
-- FastAPI
-- FastMCP
-- Dulwich
-- Tiktoken
+- **Repository Analysis**: Analyze both local and remote Git repositories
+- **Structured Output**: Generate formatted text with folder structure and concatenated file contents
+- **File Filtering**: Include or exclude files based on extensions
+- **Token Management**: Limit output size by token count
+- **Easy Integration**: Designed to work seamlessly with Cursor's MCP system
+- **Cross-Platform**: Works on Windows, macOS, and Linux
 
 ## Installation
 
-```bash
-pip install fastapi fastmcp dulwich tiktoken uvicorn
-```
+### Prerequisites
 
-## Repository Structure
+- Python 3.8+
+- Node.js 14+
+- Git
 
-```
-repo-to-txt-mcp/
-├── docs/                   # Documentation files
-│   ├── CURSOR-MCP-INTEGRATION.md  # Cursor integration guide
-│   ├── README-CLI.md       # CLI usage documentation
-│   ├── README-MCP.md       # MCP implementation details
-├── examples/               # Example outputs and demos
-│   └── sample_repository_output.txt
-├── images/                 # Images and diagrams
-│   └── mcp-architecture.md # Architecture diagram
-├── repo_to_txt.py          # Core repository analysis logic
-├── server.py               # MCP server implementation
-├── smithery-wrapper.js     # Smithery Node.js wrapper
-├── Dockerfile              # Docker configuration
-├── smithery.yaml           # Smithery configuration
-├── package.json            # Node.js package configuration
-├── requirements.txt        # Python dependencies
-└── README.md               # Main documentation
-```
+### Installation Options
 
-## Usage
+See the [Installation Guide](docs/INSTALLATION.md) for detailed instructions on:
 
-### Starting the server
+- Direct installation
+- Docker installation
+- GitHub Container Registry usage
 
-```bash
-python server.py
-```
+## Quick Start
 
-The server will start on `http://0.0.0.0:8000`.
+1. Install the required packages:
+   ```bash
+   pip install -r requirements.txt
+   npm install
+   ```
 
-### Smithery Integration
+2. Start the server:
+   ```bash
+   node smithery-wrapper.js
+   ```
 
-To run using Smithery:
+3. The server will be available at `http://localhost:8000`
+
+## API Usage
+
+### Convert a GitHub Repository
 
 ```bash
-npx @smithery/cli@latest run repo-to-txt-mcp
+curl -X POST http://localhost:8000/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "https://github.com/username/repository",
+    "return_file": true
+  }'
 ```
 
-See [Cursor MCP Integration](docs/CURSOR-MCP-INTEGRATION.md) for detailed integration instructions.
+### Filter by File Extensions
 
-### API Endpoints
-
-The MCP server provides the following tools:
-
-#### 1. repo_to_txt
-
-Converts a Git repository or local folder to a text file for LLM context.
-
-**Parameters:**
-
-- `source` (required): Repository URL or local folder path
-- `is_local` (optional, default: false): Whether the source is a local folder
-- `personal_token` (optional): Personal access token for private repositories
-- `output_dir` (optional): Output directory path
-- `directories_only` (optional, default: false): Only include directories in structure
-- `exclude` (optional): List of file extensions to exclude (e.g. .log .tmp)
-- `include` (optional): List of file extensions to include (e.g. .py .js)
-- `concatenate` (optional, default: true): Concatenate file contents
-- `include_git` (optional, default: false): Include git-related files
-- `include_license` (optional, default: false): Include license files
-- `exclude_readme` (optional, default: false): Exclude readme files
-
-**Response:**
-
-```json
-{
-  "output_file": "/path/to/output.txt",
-  "session_folder": "/path/to/session",
-  "character_count": 123456,
-  "token_count": 12345
-}
+```bash
+curl -X POST http://localhost:8000/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "https://github.com/username/repository",
+    "include_only": [".py", ".js", ".md"],
+    "exclude": [".pyc", ".git"]
+  }'
 ```
 
-#### 2. get_output_content
+See the [API Documentation](docs/API.md) for complete details.
 
-Retrieves the content of a previously generated output file.
+## Cursor Integration
 
-**Parameters:**
+This server is designed to integrate with Cursor to provide repository context to language models during conversations. 
 
-- `file_path` (required): Path to the output file
+See the [Cursor Integration Guide](docs/CURSOR-INTEGRATION.md) for instructions on how to set up and use this feature.
 
-**Response:**
+## Docker Support
 
-```json
-{
-  "content": "File content as string...",
-  "character_count": 123456,
-  "token_count": 12345
-}
+A Dockerfile is included to facilitate containerized deployment:
+
+```bash
+docker build -t repo-to-txt-mcp .
+docker run -p 8000:8000 repo-to-txt-mcp
 ```
 
-## Documentation
+## Smithery Integration
 
-- [CLI Usage](docs/README-CLI.md) - Command-line interface usage guide
-- [MCP Implementation](docs/README-MCP.md) - MCP server implementation details
-- [Cursor Integration](docs/CURSOR-MCP-INTEGRATION.md) - Guide for integrating with Cursor
+This project includes configuration for Smithery, a tool for managing MCPs:
 
-## Integration with LLM Platforms
+```bash
+smithery install chromewillow/repo-to-txt-mcp
+```
 
-This MCP server can be integrated with LLM platforms that support the MCP protocol, enabling LLMs to analyze repositories and provide context-aware responses about code.
+## Contributing
 
-## Original Project
-
-This MCP server is based on [LLM Chat Repo Context](https://github.com/lukaszliniewicz/LLM_Chat_Repo_Context) by lukaszliniewicz, which provides both GUI and CLI interfaces for analyzing repositories and generating text files for LLM context.
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- This project builds on the functionality of the [repo-to-txt](https://github.com/chromewillow/repo-to-txt-mcp) CLI tool
+- Thanks to the FastMCP library for simplifying the creation of MCP servers
