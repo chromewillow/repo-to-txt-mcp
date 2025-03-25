@@ -1,143 +1,210 @@
-#!/usr/bin/env python3
-
 import os
-import sys
 import json
-import tempfile
-import shutil
-from pathlib import Path
-from typing import List, Dict, Optional, Union, Any
-import importlib.util
+import logging
+from fastapi import FastAPI, HTTPException, Query, Body
+from fastmcp import FastMCP
+from typing import List, Optional, Dict, Any
+from repo_to_txt import analyze_repo
 
-# Import FastMCP for serving
-try:
-    from fastmcp import FastMCP, Request, Response
-except ImportError:
-    print("FastMCP not installed. Run: pip install fastmcp")
-    sys.exit(1)
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# Import the repo_to_txt module
-# Try to import from local file first, then from package
-repo_to_txt_spec = importlib.util.find_spec("repo_to_txt")
-if repo_to_txt_spec:
-    import repo_to_txt
-else:
-    # If module not found, attempt to import from the local file
+app = FastAPI(title="Repo to TXT MCP API")
+mcp = FastMCP(app)
+
+@mcp.tool("repo_to_txt", 
+         description="Convert a Git repository or local folder to a text file for LLM context")
+async def repo_to_txt_tool(
+    source: str = Query(..., description="Repository URL or local folder path"),
+    is_local: bool = Query(False, description="Whether the source is a local folder"),
+    personal_token: Optional[str] = Query(None, description="Personal access token for private repositories"),
+    output_dir: Optional[str] = Query(None, description="Output directory path"),
+    directories_only: bool = Query(False, description="Only include directories in structure"),
+    exclude: Optional[List[str]] = Query(None, description="File extensions to exclude (e.g. .log .tmp)"),
+    include: Optional[List[str]] = Query(None, description="File extensions to include (e.g. .py .js)"),
+    concatenate: bool = Query(True, description="Concatenate file contents"),
+    include_git: bool = Query(False, description="Include git-related files"),
+    include_license: bool = Query(False, description="Include license files"),
+    exclude_readme: bool = Query(False, description="Exclude readme files"),
+) -> Dict[str, Any]:
+    """
+    Convert a Git repository or local folder to a text file that provides context for LLMs.
+    The output includes the folder structure and optionally concatenated file contents.
+    """
     try:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("repo_to_txt", "repo_to_txt.py")
-        repo_to_txt = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(repo_to_txt)
-    except Exception as e:
-        print(f"Error importing repo_to_txt: {e}")
-        sys.exit(1)
-
-# Create MCP server
-app = FastMCP()
-
-@app.route("/")
-async def root() -> Response:
-    """Root endpoint that provides information about the API."""
-    return Response(
-        status_code=200,
-        content={
-            "name": "repo-to-txt-mcp",
-            "description": "MCP server for analyzing and converting Git repositories to text files",
-            "version": "1.0.0",
-            "endpoints": [
-                {"path": "/", "method": "GET", "description": "API information"},
-                {"path": "/analyze", "method": "POST", "description": "Analyze a git repository or local folder"},
-                {"path": "/health", "method": "GET", "description": "Health check"},
-            ]
+        result = analyze_repo(
+            source,
+            output_dir,
+            is_local,
+            personal_token,
+            directories_only,
+            exclude,
+            include,
+            include_git,
+            include_license,
+            exclude_readme
+        )
+        
+        if not result:
+            raise HTTPException(status_code=500, detail="Failed to analyze repository")
+        
+        output_file, session_folder = result
+        
+        # Get file stats
+        with open(output_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+            char_count = len(content)
+        
+        from repo_to_txt import count_tokens
+        token_count = count_tokens(content)
+        
+        return {
+            "output_file": output_file,
+            "session_folder": session_folder,
+            "character_count": char_count,
+            "token_count": token_count
         }
-    )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route("/health")
-async def health_check() -> Response:
-    """Health check endpoint."""
-    return Response(status_code=200, content={"status": "healthy"})
-
-@app.route("/analyze", methods=["POST"])
-async def analyze(request: Request) -> Response:
+@mcp.tool("get_output_content",
+         description="Get the content of a generated output file")
+async def get_output_content_tool(
+    file_path: str = Query(..., description="Path to the output file"),
+) -> Dict[str, Any]:
     """
-    Analyze a git repository or local folder and return structured information.
-    
-    Post parameters:
-    - source: URL of git repository or path to local folder
-    - output_dir: (Optional) Output directory for the txt file
-    - include_only: (Optional) List of file extensions to include
-    - exclude: (Optional) List of file extensions to exclude
-    - max_token_length: (Optional) Maximum number of tokens for the output
-    - return_file: (Optional) Whether to return the file content directly in the response
+    Retrieve the content of a previously generated output file.
     """
     try:
-        # Parse request data
-        data = request.json if request.json else {}
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Output file not found")
         
-        # Get parameters
-        source = data.get("source")
-        if not source:
-            return Response(status_code=400, content={"error": "Source parameter is required"})
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            char_count = len(content)
         
-        output_dir = data.get("output_dir")
-        include_only = data.get("include_only", [])
-        exclude = data.get("exclude", [])
-        max_token_length = data.get("max_token_length", 0)
-        return_file = data.get("return_file", False)
+        from repo_to_txt import count_tokens
+        token_count = count_tokens(content)
         
-        # Create temporary directory if output_dir not specified
-        temp_dir = None
-        if not output_dir:
-            temp_dir = tempfile.mkdtemp()
-            output_dir = temp_dir
-        
-        # Run repo analysis
-        try:
-            result = repo_to_txt.analyze_repo(
-                source=source,
-                output_dir=output_dir,
-                include_only=include_only,
-                exclude=exclude,
-                max_token_length=max_token_length
-            )
-            
-            # Get the path to the output txt file
-            txt_file_path = None
-            for file in os.listdir(output_dir):
-                if file.endswith(".txt"):
-                    txt_file_path = os.path.join(output_dir, file)
-                    break
-            
-            # Read file content if needed
-            file_content = None
-            if return_file and txt_file_path and os.path.exists(txt_file_path):
-                with open(txt_file_path, "r", encoding="utf-8") as f:
-                    file_content = f.read()
-            
-            # Prepare response
-            response_data = {
-                "success": True,
-                "result": result,
-                "file_path": txt_file_path
-            }
-            
-            if file_content is not None:
-                response_data["file_content"] = file_content
-            
-            return Response(status_code=200, content=response_data)
-        
-        finally:
-            # Clean up temporary directory if created
-            if temp_dir and os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
-    
+        return {
+            "content": content,
+            "character_count": char_count,
+            "token_count": token_count
+        }
     except Exception as e:
-        return Response(status_code=500, content={"error": str(e)})
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
+
+# Add explicit FastAPI POST endpoint for repo_to_txt
+@app.post("/repo_to_txt")
+async def repo_to_txt_endpoint(
+    source: str = Body(..., description="Repository URL or local folder path"),
+    is_local: bool = Body(False, description="Whether the source is a local folder"),
+    personal_token: Optional[str] = Body(None, description="Personal access token for private repositories"),
+    output_dir: Optional[str] = Body(None, description="Output directory path"),
+    directories_only: bool = Body(False, description="Only include directories in structure"),
+    exclude: Optional[List[str]] = Body(None, description="File extensions to exclude (e.g. .log .tmp)"),
+    include_only: Optional[List[str]] = Body(None, description="File extensions to include (e.g. .py .js)"),
+    concatenate: bool = Body(True, description="Concatenate file contents"),
+    include_git: bool = Body(False, description="Include git-related files"),
+    include_license: bool = Body(False, description="Include license files"),
+    exclude_readme: bool = Body(False, description="Exclude readme files"),
+    return_file: bool = Body(False, description="Whether to return the file content in the response"),
+):
+    """
+    Convert a Git repository or local folder to a text file that provides context for LLMs.
+    The output includes the folder structure and optionally concatenated file contents.
+    """
+    try:
+        logger.info(f"Analyzing repository: {source}")
+        
+        # Log the parameters
+        logger.info(f"Parameters: is_local={is_local}, directories_only={directories_only}, " +
+                   f"include_git={include_git}, include_license={include_license}, " +
+                   f"exclude_readme={exclude_readme}, return_file={return_file}")
+        
+        if include_only:
+            logger.info(f"Include only: {include_only}")
+        if exclude:
+            logger.info(f"Exclude: {exclude}")
+            
+        result = analyze_repo(
+            source,
+            output_dir,
+            is_local,
+            personal_token,
+            directories_only,
+            exclude,
+            include_only,
+            include_git,
+            include_license,
+            exclude_readme
+        )
+        
+        logger.info(f"Analysis result: {result}")
+        
+        if not isinstance(result, dict):
+            logger.error(f"Result is not a dictionary: {result}")
+            raise HTTPException(status_code=500, detail="Failed to analyze repository")
+        
+        response = {
+            "success": True,
+            "result": result
+        }
+        
+        if return_file and "output_file" in result:
+            # Read file content if needed
+            logger.info(f"Reading file content from {result['output_file']}")
+            with open(result["output_file"], "r", encoding="utf-8") as f:
+                response["file_content"] = f.read()
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error analyzing repository: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Add explicit FastAPI GET endpoint for output content
+@app.post("/get_output_content")
+async def get_output_content_endpoint(
+    file_path: str = Body(..., description="Path to the output file"),
+):
+    """
+    Retrieve the content of a previously generated output file.
+    """
+    try:
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Output file not found")
+        
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            char_count = len(content)
+        
+        from repo_to_txt import count_tokens
+        token_count = count_tokens(content)
+        
+        return {
+            "content": content,
+            "character_count": char_count,
+            "token_count": token_count
+        }
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
+    import uvicorn
+    
     # Get port from environment variable or use default
     port = int(os.environ.get("PORT", 8000))
     
-    # Start the server
     print(f"Starting repo-to-txt MCP server on port {port}")
-    app.start(port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port)
