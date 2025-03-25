@@ -41,6 +41,7 @@ async def repo_to_txt_tool(
             directories_only,
             exclude,
             include,
+            concatenate,
             include_git,
             include_license,
             exclude_readme
@@ -207,4 +208,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     
     print(f"Starting repo-to-txt MCP server on port {port}")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port) 
