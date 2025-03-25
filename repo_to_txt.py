@@ -127,6 +127,25 @@ def analyze_repo(source, output_dir=None, is_local=False, pat=None,
                 directories_only=False, exclude=None, include_only=None, 
                 include_git=False, include_license=False, exclude_readme=False,
                 max_token_length=0):
+    """
+    Analyze a git repository or local folder and return structured information.
+    
+    Args:
+        source (str): URL of git repository or path to local folder
+        output_dir (str, optional): Output directory for the txt file
+        is_local (bool): Whether source is a local folder
+        pat (str, optional): Personal access token for private repositories
+        directories_only (bool): Only include directories in structure
+        exclude (list): List of file extensions to exclude
+        include_only (list): List of file extensions to include
+        include_git (bool): Include git-related files
+        include_license (bool): Include license files
+        exclude_readme (bool): Exclude readme files
+        max_token_length (int): Maximum number of tokens for the output
+        
+    Returns:
+        dict: Information about the analysis, including file paths and statistics
+    """
     temp_dir = None
     try:
         if is_local or os.path.exists(source):
@@ -225,6 +244,7 @@ def analyze_repo(source, output_dir=None, is_local=False, pat=None,
         logging.info(f"Output written to {output_file}")
         logging.info(f"Characters: {char_count}, Tokens: {token_count}")
         
+        # Return as a dictionary for easier JSON conversion
         return {
             "repo_name": folder_name if is_local or os.path.exists(source) else repo_name,
             "output_file": output_file,
@@ -254,7 +274,7 @@ def main():
     parser.add_argument('--include', '-i', nargs='+', help='File extensions to include (e.g. .py .js)')
     parser.add_argument('--include-git', action='store_true', help='Include git files')
     parser.add_argument('--include-license', action='store_true', help='Include license files')
-    parser.add_parameter('--exclude-readme', action='store_true', help='Exclude readme files')
+    parser.add_argument('--exclude-readme', action='store_true', help='Exclude readme files')
     parser.add_argument('--max-tokens', type=int, default=0, help='Maximum number of tokens for output')
     
     args = parser.parse_args()
