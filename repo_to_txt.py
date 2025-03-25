@@ -123,36 +123,37 @@ def count_tokens(text):
         logging.error(f"Error counting tokens: {str(e)}")
         return 0
 
-def analyze_repo(source_path, output_dir=None, is_local=False, pat=None, 
-                directories_only=False, exclude=None, include=None, concatenate=True,
-                include_git=False, include_license=False, exclude_readme=False):
+def analyze_repo(source, output_dir=None, is_local=False, pat=None, 
+                directories_only=False, exclude=None, include_only=None, 
+                include_git=False, include_license=False, exclude_readme=False,
+                max_token_length=0):
     temp_dir = None
     try:
-        if is_local:
+        if is_local or os.path.exists(source):
             # Using local folder directly
-            folder_path = source_path
+            folder_path = source
             logging.info("Analyzing local folder...")
         else:
             # Clone the repository to a temporary directory
             temp_dir = tempfile.mkdtemp()
-            logging.info(f"Cloning repository: {source_path}")
+            logging.info(f"Cloning repository: {source}")
 
             # Add authentication if PAT is provided
             if pat:
                 # For GitHub, insert PAT into URL
-                if 'github.com' in source_path:
-                    repo_url = source_path.replace('https://', f'https://{pat}@')
+                if 'github.com' in source:
+                    repo_url = source.replace('https://', f'https://{pat}@')
                 else:
-                    repo_url = source_path
+                    repo_url = source
             else:
-                repo_url = source_path
+                repo_url = source
 
             try:
                 porcelain.clone(repo_url, temp_dir)
             except Exception as e:
                 logging.error(f"Failed to clone repository: {str(e)}")
                 safe_remove(temp_dir)
-                return
+                raise e
 
             folder_path = temp_dir
 
@@ -161,7 +162,7 @@ def analyze_repo(source_path, output_dir=None, is_local=False, pat=None,
             folder_path,
             directories_only,
             exclude,
-            include,
+            include_only,
             not include_git,
             not include_license,
             exclude_readme
@@ -170,26 +171,38 @@ def analyze_repo(source_path, output_dir=None, is_local=False, pat=None,
         content = f"Folder structure:\n{structure}\n"
         file_positions = {}
 
-        if concatenate:
-            logging.info("Concatenating file contents")
-            concat_content, file_positions = concatenate_files(
-                folder_path,
-                exclude,
-                include,
-                not include_git,
-                not include_license,
-                exclude_readme
-            )
-            content += f"\nConcatenated content:\n{concat_content}"
+        # Always concatenate for MCP server
+        logging.info("Concatenating file contents")
+        concat_content, file_positions = concatenate_files(
+            folder_path,
+            exclude,
+            include_only,
+            not include_git,
+            not include_license,
+            exclude_readme
+        )
+        content += f"\nConcatenated content:\n{concat_content}"
+
+        # Limit token count if specified
+        if max_token_length > 0:
+            token_count = count_tokens(content)
+            if token_count > max_token_length:
+                logging.info(f"Content exceeds token limit ({token_count} > {max_token_length}). Truncating...")
+                # Simple truncation - could be improved with more sophisticated methods
+                encoding = tiktoken.encoding_for_model("gpt-4")
+                tokens = encoding.encode(content)
+                content = encoding.decode(tokens[:max_token_length])
+                logging.info(f"Content truncated to {max_token_length} tokens")
 
         # Create session name and folder
-        if is_local:
-            folder_name = os.path.basename(source_path)
+        if is_local or os.path.exists(source):
+            folder_name = os.path.basename(os.path.abspath(source))
             session_name = f"{folder_name}_{datetime.now().strftime('%Y_%m_%d_%H%M%S')}"
         else:
-            if not source_path.endswith('.git') and '://' in source_path:
-                source_path += '.git'
-            repo_name = source_path.split('/')[-1].replace('.git', '')
+            if '://' in source:
+                repo_name = source.split('/')[-1].replace('.git', '')
+            else:
+                repo_name = os.path.basename(source).replace('.git', '')
             session_name = f"{repo_name}_{datetime.now().strftime('%Y_%m_%d_%H%M%S')}"
 
         # Create output directory if not specified
@@ -212,10 +225,18 @@ def analyze_repo(source_path, output_dir=None, is_local=False, pat=None,
         logging.info(f"Output written to {output_file}")
         logging.info(f"Characters: {char_count}, Tokens: {token_count}")
         
-        return output_file, session_folder
+        return {
+            "repo_name": folder_name if is_local or os.path.exists(source) else repo_name,
+            "output_file": output_file,
+            "session_folder": session_folder,
+            "token_count": token_count,
+            "char_count": char_count,
+            "file_count": len(file_positions)
+        }
 
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
+        raise e
     finally:
         if temp_dir:
             logging.info("Cleaning up temporary directory")
@@ -231,32 +252,32 @@ def main():
     parser.add_argument('--directories-only', '-d', action='store_true', help='Only include directories in structure')
     parser.add_argument('--exclude', '-e', nargs='+', help='File extensions to exclude (e.g. .log .tmp)')
     parser.add_argument('--include', '-i', nargs='+', help='File extensions to include (e.g. .py .js)')
-    parser.add_argument('--no-concatenate', action='store_true', help='Do not concatenate file contents')
     parser.add_argument('--include-git', action='store_true', help='Include git files')
     parser.add_argument('--include-license', action='store_true', help='Include license files')
-    parser.add_argument('--exclude-readme', action='store_true', help='Exclude readme files')
+    parser.add_parameter('--exclude-readme', action='store_true', help='Exclude readme files')
+    parser.add_argument('--max-tokens', type=int, default=0, help='Maximum number of tokens for output')
     
     args = parser.parse_args()
     
-    result = analyze_repo(
-        args.source,
-        args.output_dir,
-        args.local,
-        args.token,
-        args.directories_only,
-        args.exclude,
-        args.include,
-        not args.no_concatenate,
-        args.include_git,
-        args.include_license,
-        args.exclude_readme
-    )
-    
-    if result:
-        output_file, session_folder = result
-        print(f"\nAnalysis completed successfully!")
-        print(f"Session saved in: {session_folder}")
-        print(f"Output file: {output_file}")
+    try:
+        result = analyze_repo(
+            args.source,
+            args.output_dir,
+            args.local,
+            args.token,
+            args.directories_only,
+            args.exclude,
+            args.include,
+            args.include_git,
+            args.include_license,
+            args.exclude_readme,
+            args.max_tokens
+        )
+        print(f"Analysis complete. Output saved to {result['output_file']}")
+        print(f"Token count: {result['token_count']}")
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
