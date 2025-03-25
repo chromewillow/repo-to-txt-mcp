@@ -1,15 +1,82 @@
-# Smithery configuration file
-# See: https://smithery.ai/docs/config#smitheryyaml
+name: repo-to-txt-mcp
+description: MCP server for analyzing and converting Git repositories to text files for LLM context
+version: 1.0.0
+author: Chrome Willow
+repository: https://github.com/chromewillow/repo-to-txt-mcp
+license: MIT
 
-startCommand:
-  type: stdio
-  command: node
-  args:
-    - smithery-wrapper.js
-  configSchema:
-    type: object
-    properties:
-      port:
+smithery:
+  icon: 📚
+  color: "#5B68C0"
+  category: Utilities
+  port: 8000
+  main: smithery-wrapper.js
+  init:
+    - npm install
+    - pip install -r requirements.txt
+
+parameters:
+  - name: source
+    type: string
+    description: URL of git repository or path to local folder
+    required: true
+  - name: include_only
+    type: array
+    description: List of file extensions to include
+    required: false
+    default: []
+  - name: exclude
+    type: array
+    description: List of file extensions to exclude
+    required: false
+    default: []
+  - name: max_token_length
+    type: integer
+    description: Maximum number of tokens for the output
+    required: false
+    default: 0
+  - name: return_file
+    type: boolean
+    description: Whether to return the file content directly in the response
+    required: false
+    default: true
+
+endpoints:
+  - path: /analyze
+    method: POST
+    description: Analyze a git repository or local folder
+    params:
+      - name: source
+        type: string
+        required: true
+      - name: include_only
+        type: array
+        required: false
+      - name: exclude
+        type: array
+        required: false
+      - name: max_token_length
         type: integer
-        description: The port to run the server on (default: 8000)
-    additionalProperties: false
+        required: false
+      - name: return_file
+        type: boolean
+        required: false
+
+examples:
+  - name: Analyze GitHub Repository
+    description: Convert a GitHub repository to a text file
+    request: 
+      path: /analyze
+      method: POST
+      params:
+        source: "https://github.com/username/repository"
+        return_file: true
+    response:
+      success: true
+      result:
+        repo_name: "repository"
+        token_count: 8500
+        file_count: 25
+        file_types: {".py": 10, ".js": 8, ".md": 7}
+      file_path: "/path/to/output/repository.txt"
+      file_content: "# Repository: repository\n\n## Structure\n..."
