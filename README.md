@@ -10,6 +10,7 @@ An MCP (Multimodal Capability Provider) server implementation for the [LLM Chat 
 - Filter files by extension
 - Count tokens in the output (using tiktoken)
 - REST API for integration with LLM platforms
+- Smithery integration for easy deployment
 
 ## Requirements
 
@@ -25,6 +26,28 @@ An MCP (Multimodal Capability Provider) server implementation for the [LLM Chat 
 pip install fastapi fastmcp dulwich tiktoken uvicorn
 ```
 
+## Repository Structure
+
+```
+repo-to-txt-mcp/
+├── docs/                   # Documentation files
+│   ├── CURSOR-MCP-INTEGRATION.md  # Cursor integration guide
+│   ├── README-CLI.md       # CLI usage documentation
+│   ├── README-MCP.md       # MCP implementation details
+├── examples/               # Example outputs and demos
+│   └── sample_repository_output.txt
+├── images/                 # Images and diagrams
+│   └── mcp-architecture.md # Architecture diagram
+├── repo_to_txt.py          # Core repository analysis logic
+├── server.py               # MCP server implementation
+├── smithery-wrapper.js     # Smithery Node.js wrapper
+├── Dockerfile              # Docker configuration
+├── smithery.yaml           # Smithery configuration
+├── package.json            # Node.js package configuration
+├── requirements.txt        # Python dependencies
+└── README.md               # Main documentation
+```
+
 ## Usage
 
 ### Starting the server
@@ -34,6 +57,16 @@ python server.py
 ```
 
 The server will start on `http://0.0.0.0:8000`.
+
+### Smithery Integration
+
+To run using Smithery:
+
+```bash
+npx @smithery/cli@latest run repo-to-txt-mcp
+```
+
+See [Cursor MCP Integration](docs/CURSOR-MCP-INTEGRATION.md) for detailed integration instructions.
 
 ### API Endpoints
 
@@ -85,6 +118,12 @@ Retrieves the content of a previously generated output file.
   "token_count": 12345
 }
 ```
+
+## Documentation
+
+- [CLI Usage](docs/README-CLI.md) - Command-line interface usage guide
+- [MCP Implementation](docs/README-MCP.md) - MCP server implementation details
+- [Cursor Integration](docs/CURSOR-MCP-INTEGRATION.md) - Guide for integrating with Cursor
 
 ## Integration with LLM Platforms
 
