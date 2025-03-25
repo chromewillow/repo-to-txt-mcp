@@ -1,0 +1,90 @@
+Folder structure:
+├── /
+│   ├── .gitignore
+│   ├── LICENSE
+│   ├── README.md
+│   ├── package.json
+│   ├── requirements.txt
+│   ├── repo_to_txt.py
+│   ├── server.py
+│   ├── smithery-wrapper.js
+│   ├── smithery.yaml
+│   ├── docs/
+│   │   ├── CURSOR-MCP-INTEGRATION.md
+│   │   ├── README-CLI.md
+│   │   ├── README-MCP.md
+│   ├── examples/
+│   │   ├── sample_repository_output.txt
+│   ├── images/
+│   │   ├── gui_preview.png
+
+Concatenated content:
+
+---/---
+
+--server.py--
+import os
+import json
+from fastapi import FastAPI, HTTPException, Query
+from fastmcp import MCP
+from typing import List, Optional, Dict, Any
+from repo_to_txt import analyze_repo
+
+app = FastAPI(title="Repo to TXT MCP API")
+mcp = MCP(app)
+
+@mcp.tool("repo_to_txt", 
+         description="Convert a Git repository or local folder to a text file for LLM context",
+         output_schema={
+             "type": "object",
+             "properties": {
+                 "output_file": {"type": "string", "description": "Path to the generated output file"},
+                 "session_folder": {"type": "string", "description": "Path to the session folder"},
+                 "character_count": {"type": "integer", "description": "Character count in the output file"},
+                 "token_count": {"type": "integer", "description": "Estimated token count in the output file"}
+             },
+             "required": ["output_file", "session_folder"]
+         })
+async def repo_to_txt(
+    source: str = Query(..., description="Repository URL or local folder path"),
+    is_local: bool = Query(False, description="Whether the source is a local folder"),
+    personal_token: Optional[str] = Query(None, description="Personal access token for private repositories"),
+    output_dir: Optional[str] = Query(None, description="Output directory path"),
+    directories_only: bool = Query(False, description="Only include directories in structure"),
+    exclude: Optional[List[str]] = Query(None, description="File extensions to exclude (e.g. .log .tmp)"),
+    include: Optional[List[str]] = Query(None, description="File extensions to include (e.g. .py .js)"),
+    concatenate: bool = Query(True, description="Concatenate file contents"),
+    include_git: bool = Query(False, description="Include git-related files"),
+    include_license: bool = Query(False, description="Include license files"),
+    exclude_readme: bool = Query(False, description="Exclude readme files"),
+) -> Dict[str, Any]:
+    # Function implementation...
+
+--smithery-wrapper.js--
+#!/usr/bin/env node
+
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+// Parse config
+let config = {};
+if (process.argv.length > 2) {
+  try {
+    const configArg = process.argv.find(arg => arg.startsWith('--config='));
+    if (configArg) {
+      const configStr = configArg.split('=')[1];
+      config = JSON.parse(configStr);
+    }
+  } catch (error) {
+    console.error('Error parsing config:', error);
+  }
+}
+
+// Default port
+const port = config.port || process.env.PORT || 8000;
+
+// Function implementations...
+
+// Start the server
+startPythonServer();
