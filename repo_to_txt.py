@@ -272,32 +272,31 @@ def main():
     parser.add_argument('--directories-only', '-d', action='store_true', help='Only include directories in structure')
     parser.add_argument('--exclude', '-e', nargs='+', help='File extensions to exclude (e.g. .log .tmp)')
     parser.add_argument('--include', '-i', nargs='+', help='File extensions to include (e.g. .py .js)')
+    parser.add_argument('--no-concatenate', action='store_true', help='Do not concatenate file contents')
     parser.add_argument('--include-git', action='store_true', help='Include git files')
     parser.add_argument('--include-license', action='store_true', help='Include license files')
     parser.add_argument('--exclude-readme', action='store_true', help='Exclude readme files')
-    parser.add_argument('--max-tokens', type=int, default=0, help='Maximum number of tokens for output')
     
     args = parser.parse_args()
     
-    try:
-        result = analyze_repo(
-            args.source,
-            args.output_dir,
-            args.local,
-            args.token,
-            args.directories_only,
-            args.exclude,
-            args.include,
-            args.include_git,
-            args.include_license,
-            args.exclude_readme,
-            args.max_tokens
-        )
-        print(f"Analysis complete. Output saved to {result['output_file']}")
-        print(f"Token count: {result['token_count']}")
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        sys.exit(1)
+    result = analyze_repo(
+        args.source,
+        args.output_dir,
+        args.local,
+        args.token,
+        args.directories_only,
+        args.exclude,
+        args.include,
+        args.include_git,
+        args.include_license,
+        args.exclude_readme
+    )
+    
+    if result:
+        output_file, session_folder = result
+        print(f"\nAnalysis completed successfully!")
+        print(f"Session saved in: {session_folder}")
+        print(f"Output file: {output_file}")
 
 if __name__ == "__main__":
-    main()
+    main() 
