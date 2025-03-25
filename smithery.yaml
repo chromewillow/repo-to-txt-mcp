@@ -1,0 +1,15 @@
+# Smithery configuration file
+# See: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  command: node
+  args:
+    - smithery-wrapper.js
+  configSchema:
+    type: object
+    properties:
+      port:
+        type: integer
+        description: The port to run the server on (default: 8000)
+    additionalProperties: false
